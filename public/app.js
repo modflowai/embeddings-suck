@@ -20,12 +20,12 @@ fetch("/api/stats")
 
 // What you'd expect to find for each query
 const expectedAnswer = {
-  "SMS": { file: "sparse_matrix_solver_sms_package.md", label: "the Sparse Matrix Solver docs" },
-  "UZF": { file: "uzf", label: "the Unsaturated Zone Flow package docs" },
-  "WEL package": { file: "wel", label: "the Well (WEL) package docs" },
-  "groundwater recharge": { file: "rch", label: "recharge-related docs" },
-  "unsaturated zone flow": { file: "uzf", label: "the UZF (Unsaturated Zone Flow) docs" },
-  "PEST calibration": { file: "pest", label: "PEST calibration docs" },
+  "SMS": { files: ["sparse_matrix_solver_sms", "sms"], label: "the Sparse Matrix Solver docs" },
+  "UZF": { files: ["uzf"], label: "the Unsaturated Zone Flow package docs" },
+  "WEL package": { files: ["wel"], label: "the Well (WEL) package docs" },
+  "groundwater recharge": { files: ["rch", "recharge"], label: "recharge-related docs" },
+  "unsaturated zone flow": { files: ["uzf", "unsaturated"], label: "unsaturated zone flow docs" },
+  "PEST calibration": { files: ["pest"], label: "PEST calibration docs" },
 };
 
 // Init 3D viz
@@ -69,15 +69,11 @@ async function search(query) {
       // Caption — tell the story: what you'd expect vs what happened
       const sem1 = data.semantic.results[0]?.filepath?.split("/").pop();
       const expected = expectedAnswer[query];
-      const semFoundExpected = expected && data.semantic.results.some(r =>
-        r.filepath.toLowerCase().includes(expected.file.toLowerCase())
-      );
-      const ftsFoundExpected = expected && data.fts.results.some(r =>
-        r.filepath.toLowerCase().includes(expected.file.toLowerCase())
-      );
-      const semRank = expected && data.semantic.results.findIndex(r =>
-        r.filepath.toLowerCase().includes(expected.file.toLowerCase())
-      );
+      const matchesExpected = (filepath) =>
+        expected.files.some(f => filepath.toLowerCase().includes(f.toLowerCase()));
+      const semFoundExpected = expected && data.semantic.results.some(r => matchesExpected(r.filepath));
+      const ftsFoundExpected = expected && data.fts.results.some(r => matchesExpected(r.filepath));
+      const semRank = expected && data.semantic.results.findIndex(r => matchesExpected(r.filepath));
 
       if (expected && ftsFoundExpected && !semFoundExpected) {
         // FTS wins — embeddings missed the obvious answer
@@ -129,7 +125,7 @@ function renderFts(fts) {
     ftsContainer.innerHTML = '<div class="no-results">No matches found</div>';
     return;
   }
-  ftsContainer.innerHTML = fts.results.map((r, i) => resultCard(r, i + 1, true)).join("");
+  ftsContainer.innerHTML = fts.results.slice(0, 5).map((r, i) => resultRow(r, i + 1, true)).join("");
 }
 
 function renderSemantic(sem) {
@@ -137,20 +133,21 @@ function renderSemantic(sem) {
     semContainer.innerHTML = '<div class="no-results">No results</div>';
     return;
   }
-  semContainer.innerHTML = sem.results.map((r, i) => resultCard(r, i + 1, false)).join("");
+  semContainer.innerHTML = sem.results.slice(0, 5).map((r, i) => resultRow(r, i + 1, false)).join("");
 }
 
-function resultCard(r, rank, isFts) {
+function resultRow(r, rank, isFts) {
   const snippet = isFts ? r.snippet : escapeHtml(r.snippet);
+  const filename = r.filepath.split("/").pop();
 
   return `
-    <div class="result-card">
-      <div class="card-header">
-        <span class="card-rank">#${rank}</span>
-        <span class="card-filepath">${escapeHtml(r.filepath)}</span>
-        <span class="repo-badge">${escapeHtml(r.repo)}</span>
+    <div class="result-row">
+      <div class="row-header">
+        <span class="row-rank">#${rank}</span>
+        <span class="row-filepath">${escapeHtml(filename)}</span>
+        <span class="row-repo">${escapeHtml(r.repo)}</span>
       </div>
-      <div class="card-snippet">${snippet}</div>
+      <div class="row-snippet">${snippet}</div>
     </div>`;
 }
 

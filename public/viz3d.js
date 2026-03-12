@@ -208,19 +208,21 @@ export function highlightSearch(ftsResults, semanticResults, query) {
   if (qp) {
     const qPos = new THREE.Vector3(qp.x * SCALE, qp.y * SCALE, qp.z * SCALE);
 
-    // Query marker — small bright sphere
+    // Query marker — small bright sphere + label
     const qGeo = new THREE.SphereGeometry(0.8, 16, 16);
     const qMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
     const qMesh = new THREE.Mesh(qGeo, qMat);
     qMesh.position.copy(qPos);
     highlightGroup.add(qMesh);
+    highlightGroup.add(makeLabel(`"${query}"`, qPos, 0xff4444, 1.2));
 
-    // FTS top-3 — green spheres + lines
+    // FTS top-3 — green spheres + lines + labels
     for (let i = 0; i < Math.min(3, ftsResults.length); i++) {
       const idx = fpIndex[ftsResults[i].filepath];
       if (idx === undefined) continue;
       const d = pointsData.docs[idx];
       const fPos = new THREE.Vector3(d.x * SCALE, d.y * SCALE, d.z * SCALE);
+      const filename = ftsResults[i].filepath.split("/").pop();
 
       const fGeo = new THREE.SphereGeometry(0.45 - i * 0.08, 12, 12);
       const fMat = new THREE.MeshBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.9 - i * 0.15 });
@@ -228,24 +230,33 @@ export function highlightSearch(ftsResults, semanticResults, query) {
       fMesh.position.copy(fPos);
       highlightGroup.add(fMesh);
 
+      if (i === 0) {
+        highlightGroup.add(makeLabel(`#1 Text: ${filename}`, fPos, 0x22c55e, 1.0));
+      }
+
       const lineGeo = new THREE.BufferGeometry().setFromPoints([qPos, fPos]);
       const lineMat = new THREE.LineBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.4 - i * 0.1 });
       highlightGroup.add(new THREE.Line(lineGeo, lineMat));
     }
 
-    // Semantic top-3 — blue spheres + lines
+    // Semantic top-3 — blue spheres + lines + labels
     if (semanticResults) {
       for (let i = 0; i < Math.min(3, semanticResults.length); i++) {
         const idx = fpIndex[semanticResults[i].filepath];
         if (idx === undefined) continue;
         const d = pointsData.docs[idx];
         const dPos = new THREE.Vector3(d.x * SCALE, d.y * SCALE, d.z * SCALE);
+        const filename = semanticResults[i].filepath.split("/").pop();
 
         const sGeo = new THREE.SphereGeometry(0.45 - i * 0.08, 12, 12);
         const sMat = new THREE.MeshBasicMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.9 - i * 0.15 });
         const sMesh = new THREE.Mesh(sGeo, sMat);
         sMesh.position.copy(dPos);
         highlightGroup.add(sMesh);
+
+        if (i === 0) {
+          highlightGroup.add(makeLabel(`#1 Emb: ${filename}`, dPos, 0x3b82f6, 1.0));
+        }
 
         const lineGeo = new THREE.BufferGeometry().setFromPoints([qPos, dPos]);
         const lineMat = new THREE.LineBasicMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.4 - i * 0.1 });
@@ -276,6 +287,56 @@ export function resetViz() {
   }
   colors.needsUpdate = true;
   docPoints.material.opacity = 0.7;
+}
+
+function makeLabel(text, position, color, yOffset = 1.0) {
+  const THREE = window.__THREE__;
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  // Measure text to size canvas
+  const fontSize = 28;
+  ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  const metrics = ctx.measureText(text);
+  const textWidth = metrics.width + 24;
+  const textHeight = fontSize + 16;
+
+  canvas.width = Math.min(textWidth, 800);
+  canvas.height = textHeight;
+
+  // Draw background pill
+  ctx.fillStyle = "rgba(10, 10, 10, 0.85)";
+  const r = textHeight / 2;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, canvas.width, canvas.height, r);
+  ctx.fill();
+
+  // Draw border
+  const c = new THREE.Color(color);
+  ctx.strokeStyle = `rgba(${c.r*255|0}, ${c.g*255|0}, ${c.b*255|0}, 0.8)`;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(1, 1, canvas.width - 2, canvas.height - 2, r);
+  ctx.stroke();
+
+  // Draw text
+  ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.fillStyle = `rgb(${c.r*255|0}, ${c.g*255|0}, ${c.b*255|0})`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  const aspect = canvas.width / canvas.height;
+  const spriteScale = 2.2;
+
+  const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(spriteScale * aspect, spriteScale, 1);
+  sprite.position.set(position.x, position.y + yOffset + 1.5, position.z);
+
+  return sprite;
 }
 
 function animate() {

@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Embeddings Suck (sometimes)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script type="importmap">
   {
@@ -36,16 +39,14 @@
 
   <!-- 3D Embedding Space Visualization -->
   <section class="viz-section">
-    <div class="viz-header">
-      <h2>Embedding Space <span class="subtitle">1,616 docs projected to 3D via PCA</span></h2>
+    <p class="viz-explainer">Each dot is a document. <strong>In embedding space, distance = similarity.</strong> The closest documents to your query should be the right answer.</p>
+    <div id="viz3d" class="viz-container">
       <div class="viz-legend">
         <span class="legend-item"><span class="legend-dot" style="background:#ff4444"></span>Your query</span>
         <span class="legend-item"><span class="legend-dot" style="background:#22c55e"></span>Text search</span>
         <span class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span>Embedding results</span>
       </div>
     </div>
-    <p class="viz-explainer">Each dot is a document. <strong>Distance = similarity.</strong> If embeddings work, the closest documents to your query should be the right answer. Let's see if they are.</p>
-    <div id="viz3d" class="viz-container"></div>
     <p class="viz-caption" id="vizCaption">Click a query above to see where it lands in embedding space</p>
   </section>
 
