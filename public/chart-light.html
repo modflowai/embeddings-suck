@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chart — Light</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #fafafa;
+      color: #1a1a1a;
+      font-family: 'Geist', -apple-system, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    #viz3d {
+      flex: 1;
+      position: relative;
+    }
+    .viz-legend {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      display: flex;
+      gap: 0.9rem;
+      font-size: 0.75rem;
+      color: #737373;
+      z-index: 5;
+      background: rgba(255, 255, 255, 0.85);
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+      border: 1px solid #e5e5e5;
+    }
+    .legend-item { display: flex; align-items: center; gap: 0.3rem; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .viz-tooltip {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.95);
+      color: #1a1a1a;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.45rem;
+      border-radius: 4px;
+      border: 1px solid #d4d4d4;
+      pointer-events: none;
+      display: none;
+      z-index: 10;
+      white-space: nowrap;
+    }
+    .chips {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      gap: 0.4rem;
+      justify-content: center;
+      z-index: 5;
+      padding: 0.6rem 0;
+      background: linear-gradient(transparent, rgba(250,250,250,0.9) 40%);
+    }
+    .chip {
+      padding: 0.3rem 0;
+      font-size: 0.75rem;
+      font-family: inherit;
+      background: none;
+      border: none;
+      color: #a3a3a3;
+      cursor: pointer;
+      transition: color 0.15s;
+      letter-spacing: 0.01em;
+    }
+    .chip:hover { color: #525252; }
+    .chip.active { color: #1a1a1a; font-weight: 600; }
+    .chips-sep { color: #d4d4d4; font-size: 0.6rem; align-self: center; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="viz3d">
+    <div class="viz-legend">
+      <span class="legend-item"><span class="legend-dot" style="background:#dc2626"></span>Your query</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#16a34a"></span>Text search</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#2563eb"></span>Embedding results</span>
+    </div>
+    <div class="chips">
+      <button class="chip" data-query="SMS">SMS</button>
+      <span class="chips-sep">/</span>
+      <button class="chip" data-query="UZF">UZF</button>
+      <span class="chips-sep">/</span>
+      <button class="chip" data-query="WEL package">WEL package</button>
+      <span class="chips-sep">/</span>
+      <button class="chip" data-query="groundwater recharge">groundwater recharge</button>
+      <span class="chips-sep">/</span>
+      <button class="chip" data-query="unsaturated zone flow">unsaturated zone flow</button>
+      <span class="chips-sep">/</span>
+      <button class="chip" data-query="PEST calibration">PEST calibration</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    const SCALE = 60;
+    const LIGHT_BG = 0xfafafa;
+
+    // Richer colors for light bg
+    // Brighter, more saturated colors for light background
+    const REPO_COLORS = {
+      mfusg: 0xa855f7, mf6: 0x06b6d4, flopy: 0xf97316, pyemu: 0xec4899,
+      pest: 0xeab308, pestpp: 0x84cc16, gwutils: 0x14b8a6, pest_hp: 0xf43f5e,
+      plproc: 0x818cf8, modflowai: 0x60a5fa,
+    };
+
+    const container = document.getElementById("viz3d");
+    const resp = await fetch("/points-3d.json");
+    const pointsData = await resp.json();
+
+    // Scene
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(LIGHT_BG);
+
+    const w = container.clientWidth, h = container.clientHeight;
+    const camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 500);
+    camera.position.set(0, 0, 55);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.enablePan = true;
+    controls.screenSpacePanning = true;
+    controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.3;
+    controls.maxDistance = 120;
+    controls.minDistance = 10;
+
+    renderer.domElement.addEventListener("mousedown", (e) => { if (e.button === 1) e.preventDefault(); });
+
+    // --- 3D Grid + Axes ---
+    const gridSize = 50;
+    const gridDiv = 10;
+
+    // Subtle floor grid
+    const gridHelper = new THREE.GridHelper(gridSize * 2, gridDiv * 2, 0xd4d4d4, 0xe5e5e5);
+    gridHelper.position.y = -gridSize / 2;
+    gridHelper.material.transparent = true;
+    gridHelper.material.opacity = 0.15;
+    scene.add(gridHelper);
+
+    // Axis lines — thin, elegant
+    function makeAxis(from, to, color) {
+      const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(...from),
+        new THREE.Vector3(...to),
+      ]);
+      const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.35, linewidth: 1 });
+      return new THREE.Line(geo, mat);
+    }
+
+    const axLen = gridSize;
+    scene.add(makeAxis([-axLen, 0, 0], [axLen, 0, 0], 0xdc2626)); // X red
+    scene.add(makeAxis([0, -axLen, 0], [0, axLen, 0], 0x16a34a)); // Y green
+    scene.add(makeAxis([0, 0, -axLen], [0, 0, axLen], 0x2563eb)); // Z blue
+
+    // Circular sprite for points
+    const canvas = document.createElement("canvas");
+    canvas.width = 32; canvas.height = 32;
+    const ctx = canvas.getContext("2d");
+    ctx.beginPath(); ctx.arc(16, 16, 14, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff"; ctx.fill();
+    const circleTexture = new THREE.CanvasTexture(canvas);
+
+    // Doc points
+    const count = pointsData.docs.length;
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+
+    let cx = 0, cy = 0, cz = 0;
+    for (let i = 0; i < count; i++) {
+      const d = pointsData.docs[i];
+      positions[i * 3] = d.x * SCALE;
+      positions[i * 3 + 1] = d.y * SCALE;
+      positions[i * 3 + 2] = d.z * SCALE;
+      cx += d.x * SCALE; cy += d.y * SCALE; cz += d.z * SCALE;
+      const c = new THREE.Color(REPO_COLORS[d.r] || 0x999999);
+      colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+    }
+    // Center camera on point cloud centroid
+    const centroid = new THREE.Vector3(cx / count, cy / count, cz / count);
+    controls.target.copy(centroid);
+    camera.position.set(centroid.x, centroid.y, centroid.z + 55);
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    geo.userData.originalColors = new Float32Array(colors);
+
+    const mat = new THREE.PointsMaterial({
+      size: 1.2, map: circleTexture, vertexColors: true,
+      transparent: true, opacity: 0.85, alphaTest: 0.3,
+      sizeAttenuation: true, depthWrite: false,
+    });
+
+    const docPoints = new THREE.Points(geo, mat);
+    scene.add(docPoints);
+
+    const highlightGroup = new THREE.Group();
+    scene.add(highlightGroup);
+
+    // Tooltip
+    const tooltipDiv = document.createElement("div");
+    tooltipDiv.className = "viz-tooltip";
+    container.appendChild(tooltipDiv);
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.params.Points.threshold = 0.5;
+    const mouse = new THREE.Vector2();
+
+    renderer.domElement.addEventListener("mousemove", (e) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObject(docPoints);
+      if (intersects.length > 0) {
+        const doc = pointsData.docs[intersects[0].index];
+        tooltipDiv.textContent = `${doc.f} (${doc.r})`;
+        tooltipDiv.style.display = "block";
+        tooltipDiv.style.left = (e.clientX - rect.left + 14) + "px";
+        tooltipDiv.style.top = (e.clientY - rect.top - 10) + "px";
+      } else { tooltipDiv.style.display = "none"; }
+    });
+    renderer.domElement.addEventListener("mouseleave", () => { tooltipDiv.style.display = "none"; });
+
+    // Label — light version (dark text on light bg)
+    function makeLabel(text, position, color, yOffset = 1.0) {
+      const cvs = document.createElement("canvas");
+      const c = cvs.getContext("2d");
+      const fontSize = 22;
+      const font = `500 ${fontSize}px 'Geist', -apple-system, sans-serif`;
+      c.font = font;
+      const metrics = c.measureText(text);
+      cvs.width = Math.min(metrics.width + 16, 800);
+      cvs.height = fontSize + 8;
+      c.font = font;
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.shadowColor = "rgba(250, 250, 250, 0.9)";
+      c.shadowBlur = 8;
+      c.shadowOffsetX = 0; c.shadowOffsetY = 1;
+      const col = new THREE.Color(color);
+      c.fillStyle = `rgb(${col.r*255|0}, ${col.g*255|0}, ${col.b*255|0})`;
+      c.fillText(text, cvs.width / 2, cvs.height / 2);
+      const texture = new THREE.CanvasTexture(cvs);
+      texture.minFilter = THREE.LinearFilter;
+      const aspect = cvs.width / cvs.height;
+      const m = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+      const sprite = new THREE.Sprite(m);
+      sprite.scale.set(1.5 * aspect, 1.5, 1);
+      sprite.position.set(position.x, position.y + yOffset + 1.5, position.z);
+      return sprite;
+    }
+
+    // Search + highlight
+    async function doSearch(query) {
+      const res = await fetch("/api/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+      const data = await res.json();
+      if (!data.semantic) return;
+
+      // Clear
+      while (highlightGroup.children.length) {
+        const ch = highlightGroup.children[0];
+        ch.geometry?.dispose(); ch.material?.dispose();
+        highlightGroup.remove(ch);
+      }
+
+      // Dim slightly but keep colors visible
+      docPoints.material.opacity = 0.5;
+
+      const fpIndex = {};
+      pointsData.docs.forEach((d, i) => { fpIndex[d.f] = i; });
+
+      // Query point
+      const qp = pointsData.queries[query];
+      if (qp) {
+        const qPos = new THREE.Vector3(qp.x * SCALE, qp.y * SCALE, qp.z * SCALE);
+        const qGeo = new THREE.SphereGeometry(0.8, 16, 16);
+        const qMat = new THREE.MeshBasicMaterial({ color: 0xdc2626 });
+        const qMesh = new THREE.Mesh(qGeo, qMat);
+        qMesh.position.copy(qPos);
+        highlightGroup.add(qMesh);
+        highlightGroup.add(makeLabel(`"${query}"`, qPos, 0xdc2626, 1.2));
+
+        // FTS top 3
+        for (let i = 0; i < Math.min(3, data.fts.results.length); i++) {
+          const idx = fpIndex[data.fts.results[i].filepath];
+          if (idx === undefined) continue;
+          const d = pointsData.docs[idx];
+          const fPos = new THREE.Vector3(d.x*SCALE, d.y*SCALE, d.z*SCALE);
+          const fGeo = new THREE.SphereGeometry(0.45-i*0.08, 12, 12);
+          const fMat = new THREE.MeshBasicMaterial({ color: 0x16a34a, transparent: true, opacity: 0.9-i*0.15 });
+          const fMesh = new THREE.Mesh(fGeo, fMat); fMesh.position.copy(fPos);
+          highlightGroup.add(fMesh);
+          if (i === 0) highlightGroup.add(makeLabel(data.fts.results[i].filepath.split("/").pop(), fPos, 0x16a34a, 1.0));
+          const lineGeo = new THREE.BufferGeometry().setFromPoints([qPos, fPos]);
+          const lineMat = new THREE.LineBasicMaterial({ color: 0x16a34a, transparent: true, opacity: 0.3-i*0.08 });
+          highlightGroup.add(new THREE.Line(lineGeo, lineMat));
+        }
+
+        // Semantic top 3
+        for (let i = 0; i < Math.min(3, data.semantic.results.length); i++) {
+          const idx = fpIndex[data.semantic.results[i].filepath];
+          if (idx === undefined) continue;
+          const d = pointsData.docs[idx];
+          const dPos = new THREE.Vector3(d.x*SCALE, d.y*SCALE, d.z*SCALE);
+          const sGeo = new THREE.SphereGeometry(0.45-i*0.08, 12, 12);
+          const sMat = new THREE.MeshBasicMaterial({ color: 0x2563eb, transparent: true, opacity: 0.9-i*0.15 });
+          const sMesh = new THREE.Mesh(sGeo, sMat); sMesh.position.copy(dPos);
+          highlightGroup.add(sMesh);
+          if (i === 0) highlightGroup.add(makeLabel(data.semantic.results[i].filepath.split("/").pop(), dPos, 0x2563eb, 1.0));
+          const lineGeo = new THREE.BufferGeometry().setFromPoints([qPos, dPos]);
+          const lineMat = new THREE.LineBasicMaterial({ color: 0x2563eb, transparent: true, opacity: 0.3-i*0.08 });
+          highlightGroup.add(new THREE.Line(lineGeo, lineMat));
+        }
+
+        controls.target.set(0, 0, 0);
+      }
+    }
+
+    // Chips
+    const chips = document.querySelectorAll(".chip");
+    chips.forEach(chip => {
+      chip.addEventListener("click", () => {
+        chips.forEach(c => c.classList.remove("active"));
+        chip.classList.add("active");
+        doSearch(chip.dataset.query);
+      });
+    });
+
+    // Resize
+    new ResizeObserver(() => {
+      const w = container.clientWidth, h = container.clientHeight;
+      camera.aspect = w / h; camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }).observe(container);
+
+    // Animate
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Auto-click SMS
+    setTimeout(() => chips[0].click(), 500);
+  </script>
+</body>
+</html>

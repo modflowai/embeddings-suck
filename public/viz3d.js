@@ -7,6 +7,7 @@ let scene, camera, renderer, controls;
 let docPoints = null;
 let pointsData = null;
 let highlightGroup = null;
+let gridGroup = null;
 let tooltipDiv = null;
 let raycaster, mouse;
 
@@ -41,7 +42,8 @@ export async function init3D(containerId) {
 
   // Scene
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0a0a0a);
+  const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  scene.background = new THREE.Color(bgColor);
   // No fog — we want all points visible
 
   const w = container.clientWidth;
@@ -57,10 +59,22 @@ export async function init3D(containerId) {
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
+  controls.enablePan = true;
+  controls.screenSpacePanning = true;
+  controls.mouseButtons = {
+    LEFT: THREE.MOUSE.ROTATE,
+    MIDDLE: THREE.MOUSE.PAN,
+    RIGHT: THREE.MOUSE.PAN,
+  };
   controls.autoRotate = true;
   controls.autoRotateSpeed = 0.3;
   controls.maxDistance = 120;
   controls.minDistance = 10;
+
+  // Prevent browser auto-scroll on middle click
+  renderer.domElement.addEventListener("mousedown", (e) => {
+    if (e.button === 1) e.preventDefault();
+  });
 
   raycaster = new THREE.Raycaster();
   raycaster.params.Points.threshold = 0.5;
@@ -105,11 +119,11 @@ export async function init3D(containerId) {
   geo.userData.originalColors = new Float32Array(colors);
 
   const mat = new THREE.PointsMaterial({
-    size: 1.0,
+    size: 1.2,
     map: circleTexture,
     vertexColors: true,
     transparent: true,
-    opacity: 0.7,
+    opacity: 0.85,
     alphaTest: 0.3,
     sizeAttenuation: true,
     depthWrite: false,
@@ -117,6 +131,37 @@ export async function init3D(containerId) {
 
   docPoints = new THREE.Points(geo, mat);
   scene.add(docPoints);
+
+  // Center camera on point cloud centroid
+  let cx = 0, cy = 0, cz = 0;
+  for (let i = 0; i < count; i++) {
+    cx += positions[i * 3]; cy += positions[i * 3 + 1]; cz += positions[i * 3 + 2];
+  }
+  const centroid = new THREE.Vector3(cx / count, cy / count, cz / count);
+  controls.target.copy(centroid);
+  camera.position.set(centroid.x, centroid.y, centroid.z + 55);
+
+  // --- 3D Grid + Axes ---
+  gridGroup = new THREE.Group();
+  const gridSize = 50;
+  const gridDiv = 10;
+
+  buildGrid(THREE, gridGroup, gridSize, gridDiv);
+  gridGroup.userData.gridSize = gridSize;
+  gridGroup.userData.gridDiv = gridDiv;
+
+  function makeAxis(from, to, color) {
+    const axGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(...from), new THREE.Vector3(...to),
+    ]);
+    const axMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.35 });
+    return new THREE.Line(axGeo, axMat);
+  }
+  const axLen = gridSize;
+  gridGroup.add(makeAxis([-axLen, 0, 0], [axLen, 0, 0], 0xdc2626)); // X red
+  gridGroup.add(makeAxis([0, -axLen, 0], [0, axLen, 0], 0x16a34a)); // Y green
+  gridGroup.add(makeAxis([0, 0, -axLen], [0, 0, axLen], 0x2563eb)); // Z blue
+  scene.add(gridGroup);
 
   highlightGroup = new THREE.Group();
   scene.add(highlightGroup);
@@ -231,7 +276,7 @@ export function highlightSearch(ftsResults, semanticResults, query) {
       highlightGroup.add(fMesh);
 
       if (i === 0) {
-        highlightGroup.add(makeLabel(`#1 Text: ${filename}`, fPos, 0x22c55e, 1.0));
+        highlightGroup.add(makeLabel(filename, fPos, 0x22c55e, 1.0));
       }
 
       const lineGeo = new THREE.BufferGeometry().setFromPoints([qPos, fPos]);
@@ -255,7 +300,7 @@ export function highlightSearch(ftsResults, semanticResults, query) {
         highlightGroup.add(sMesh);
 
         if (i === 0) {
-          highlightGroup.add(makeLabel(`#1 Emb: ${filename}`, dPos, 0x3b82f6, 1.0));
+          highlightGroup.add(makeLabel(filename, dPos, 0x3b82f6, 1.0));
         }
 
         const lineGeo = new THREE.BufferGeometry().setFromPoints([qPos, dPos]);
@@ -266,6 +311,47 @@ export function highlightSearch(ftsResults, semanticResults, query) {
 
     // Keep camera centered on origin, just update target toward query
     controls.target.set(0, 0, 0);
+  }
+}
+
+function buildGrid(THREE, group, gridSize, gridDiv) {
+  // Remove old grid helper if any
+  for (let i = group.children.length - 1; i >= 0; i--) {
+    if (group.children[i].isGridHelper) {
+      group.children[i].geometry?.dispose();
+      if (Array.isArray(group.children[i].material)) {
+        group.children[i].material.forEach(m => m.dispose());
+      } else {
+        group.children[i].material?.dispose();
+      }
+      group.remove(group.children[i]);
+    }
+  }
+
+  const isLight = document.documentElement.classList.contains("light");
+  const gridHelper = new THREE.GridHelper(gridSize * 2, gridDiv * 2,
+    isLight ? 0x999999 : 0x333333,
+    isLight ? 0xbbbbbb : 0x222222
+  );
+  gridHelper.position.y = -gridSize / 2;
+  // GridHelper creates an array of materials
+  const mats = Array.isArray(gridHelper.material) ? gridHelper.material : [gridHelper.material];
+  mats.forEach(m => {
+    m.transparent = true;
+    m.opacity = isLight ? 0.35 : 0.15;
+  });
+  group.add(gridHelper);
+}
+
+export function updateThemeBg() {
+  if (!scene || !window.__THREE__) return;
+  const THREE = window.__THREE__;
+  const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  scene.background = new THREE.Color(bgColor);
+
+  // Rebuild grid with theme-appropriate colors
+  if (gridGroup) {
+    buildGrid(THREE, gridGroup, gridGroup.userData.gridSize, gridGroup.userData.gridDiv);
   }
 }
 
@@ -294,42 +380,36 @@ function makeLabel(text, position, color, yOffset = 1.0) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
 
-  // Measure text to size canvas
-  const fontSize = 28;
-  ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  const fontSize = 22;
+  const font = `500 ${fontSize}px 'Geist', -apple-system, sans-serif`;
+  ctx.font = font;
   const metrics = ctx.measureText(text);
-  const textWidth = metrics.width + 24;
-  const textHeight = fontSize + 16;
+  const textWidth = metrics.width + 16;
+  const textHeight = fontSize + 8;
 
   canvas.width = Math.min(textWidth, 800);
   canvas.height = textHeight;
 
-  // Draw background pill
-  ctx.fillStyle = "rgba(10, 10, 10, 0.85)";
-  const r = textHeight / 2;
-  ctx.beginPath();
-  ctx.roundRect(0, 0, canvas.width, canvas.height, r);
-  ctx.fill();
-
-  // Draw border
+  // No background, no pill — just text with a subtle shadow for readability
   const c = new THREE.Color(color);
-  ctx.strokeStyle = `rgba(${c.r*255|0}, ${c.g*255|0}, ${c.b*255|0}, 0.8)`;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.roundRect(1, 1, canvas.width - 2, canvas.height - 2, r);
-  ctx.stroke();
-
-  // Draw text
-  ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
-  ctx.fillStyle = `rgb(${c.r*255|0}, ${c.g*255|0}, ${c.b*255|0})`;
+  ctx.font = font;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+
+  // Thin outline for readability — no glow
+  const isLight = document.documentElement.classList.contains("light");
+  ctx.strokeStyle = isLight ? "rgba(255,255,255,0.8)" : "rgba(0,0,0,0.7)";
+  ctx.lineWidth = 3;
+  ctx.lineJoin = "round";
+  ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
+
+  ctx.fillStyle = `rgb(${c.r*255|0}, ${c.g*255|0}, ${c.b*255|0})`;
   ctx.fillText(text, canvas.width / 2, canvas.height / 2);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.minFilter = THREE.LinearFilter;
   const aspect = canvas.width / canvas.height;
-  const spriteScale = 2.2;
+  const spriteScale = 1.5;
 
   const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
   const sprite = new THREE.Sprite(mat);

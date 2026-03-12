@@ -1,4 +1,4 @@
-import { init3D, highlightSearch, resetViz } from "./viz3d.js";
+import { init3D, highlightSearch, resetViz, updateThemeBg } from "./viz3d.js";
 
 const ftsContainer = document.getElementById("ftsResults");
 const semContainer = document.getElementById("semanticResults");
@@ -156,3 +156,10 @@ function escapeHtml(s) {
   d.textContent = s || "";
   return d.innerHTML;
 }
+
+// Theme toggle
+document.getElementById("themeToggle").addEventListener("click", () => {
+  const isLight = document.documentElement.classList.toggle("light");
+  localStorage.setItem("theme", isLight ? "light" : "dark");
+  updateThemeBg();
+});

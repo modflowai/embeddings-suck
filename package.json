@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "ml-matrix": "^6.12.1",
-    "ml-pca": "^4.1.1"
+    "ml-pca": "^4.1.1",
+    "playwright": "^1.58.2"
   }
 }

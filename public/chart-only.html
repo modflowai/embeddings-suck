@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chart Only</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a0a;
+      color: #e5e5e5;
+      font-family: 'Geist', -apple-system, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    #viz3d {
+      flex: 1;
+      position: relative;
+    }
+    .viz-legend {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      display: flex;
+      gap: 0.9rem;
+      font-size: 0.75rem;
+      color: #a3a3a3;
+      z-index: 5;
+      background: rgba(10, 10, 10, 0.7);
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 0.3rem; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .viz-tooltip {
+      position: absolute;
+      background: rgba(20, 20, 20, 0.95);
+      color: #e5e5e5;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.45rem;
+      border-radius: 4px;
+      border: 1px solid #1e1e1e;
+      pointer-events: none;
+      display: none;
+      z-index: 10;
+      white-space: nowrap;
+    }
+    .chips {
+      position: absolute;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 0.4rem;
+      z-index: 5;
+    }
+    .chip {
+      padding: 0.3rem 0;
+      font-size: 0.75rem;
+      font-family: inherit;
+      background: none;
+      border: none;
+      color: #737373;
+      cursor: pointer;
+      transition: color 0.15s;
+      letter-spacing: 0.01em;
+    }
+    .chip:hover { color: #a3a3a3; }
+    .chip.active { color: #e5e5e5; font-weight: 600; }
+    .chips-sep { color: #333; font-size: 0.6rem; align-self: center; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="viz3d">
+    <div class="viz-legend">
+      <span class="legend-item"><span class="legend-dot" style="background:#ff4444"></span>Your query</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#22c55e"></span>Text search</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span>Embedding results</span>
+    </div>
+    <div class="chips">
+      <button class="chip" data-query="SMS">SMS</button>
+      <span class="chips-sep">/</span>
+      <button class="chip" data-query="UZF">UZF</button>
+      <span class="chips-sep">/</span>
+      <button class="chip" data-query="WEL package">WEL package</button>
+      <span class="chips-sep">/</span>
+      <button class="chip" data-query="groundwater recharge">groundwater recharge</button>
+      <span class="chips-sep">/</span>
+      <button class="chip" data-query="unsaturated zone flow">unsaturated zone flow</button>
+      <span class="chips-sep">/</span>
+      <button class="chip" data-query="PEST calibration">PEST calibration</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { init3D, highlightSearch } from "./viz3d.js";
+
+    await init3D("viz3d");
+
+    const chips = document.querySelectorAll(".chip");
+    chips.forEach(chip => {
+      chip.addEventListener("click", async () => {
+        chips.forEach(c => c.classList.remove("active"));
+        chip.classList.add("active");
+        const query = chip.dataset.query;
+        const res = await fetch("/api/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+        const data = await res.json();
+        if (data.semantic) {
+          highlightSearch(data.fts.results, data.semantic.results, query);
+        }
+      });
+    });
+
+    // Auto-click SMS on load
+    setTimeout(() => chips[0].click(), 500);
+  </script>
+</body>
+</html>
