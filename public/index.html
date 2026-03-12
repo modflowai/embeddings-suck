@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Embeddings Suck (sometimes)</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header>
+    <h1>Embeddings Suck <span class="subtitle">(sometimes)</span></h1>
+    <p class="tagline">Text search vs AI embeddings on 1,862 MODFLOW hydrogeology docs</p>
+    <p class="philosophy">The only way to know what works is to try it on your own data.</p>
+  </header>
+
+  <section class="search-area">
+    <div class="chips">
+      <input type="hidden" id="searchInput">
+      <button class="chip chip-fts" data-query="SMS">SMS</button>
+      <button class="chip chip-fts" data-query="UZF">UZF</button>
+      <button class="chip chip-fts" data-query="WEL package">WEL package</button>
+      <button class="chip chip-sem" data-query="groundwater recharge">groundwater recharge</button>
+      <button class="chip chip-sem" data-query="unsaturated zone flow">unsaturated zone flow</button>
+      <button class="chip chip-mixed" data-query="PEST calibration">PEST calibration</button>
+    </div>
+    <p class="chip-hint" id="activeQuery"></p>
+  </section>
+
+  <!-- 3D Embedding Space Visualization -->
+  <section class="viz-section">
+    <div class="viz-header">
+      <h2>Embedding Space <span class="subtitle">1,616 docs projected to 3D via PCA</span></h2>
+      <div class="viz-legend">
+        <span class="legend-item"><span class="legend-dot" style="background:#ff4444"></span>Your query</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#22c55e"></span>Text search</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span>Embedding results</span>
+      </div>
+    </div>
+    <p class="viz-explainer">Each dot is a document. <strong>Distance = similarity.</strong> If embeddings work, the closest documents to your query should be the right answer. Let's see if they are.</p>
+    <div id="viz3d" class="viz-container"></div>
+    <p class="viz-caption" id="vizCaption">Click a query above to see where it lands in embedding space</p>
+  </section>
+
+  <section class="results-grid" id="resultsGrid">
+    <div class="column fts-column">
+      <div class="column-header">
+        <h2>Text Search <span class="method-badge fts-badge">Ctrl+F</span></h2>
+        <p class="method-desc">Classic text matching. Finds the exact words you typed.</p>
+        <div class="timing" id="ftsTiming"></div>
+      </div>
+      <div class="results-list" id="ftsResults">
+        <div class="empty-state">Pick a query above to compare</div>
+      </div>
+    </div>
+    <div class="column semantic-column">
+      <div class="column-header">
+        <h2>Embeddings <span class="method-badge semantic-badge">AI</span></h2>
+        <p class="method-desc">OpenAI text-embedding-3-small. Finds "similar meaning" via cosine distance.</p>
+        <div class="timing" id="semanticTiming"></div>
+      </div>
+      <div class="results-list" id="semanticResults">
+        <div class="empty-state">Pick a query above to compare</div>
+      </div>
+    </div>
+  </section>
+
+  <footer id="footer"></footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
