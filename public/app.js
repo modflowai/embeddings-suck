@@ -13,15 +13,14 @@ fetch("/api/stats")
   .then((r) => r.json())
   .then((s) => {
     document.getElementById("footer").innerHTML =
-      `${s.total_docs.toLocaleString()} docs &middot; ${s.total_repos} repos &middot; ` +
-      `${s.with_embeddings.toLocaleString()} embeddings &middot; ` +
-      `PostgreSQL 17 + pgvector &middot; text-embedding-3-small`;
+      `${s.total_docs.toLocaleString()} documents from ${s.total_repos} repositories &mdash; embedded, indexed, and compared` +
+      `<span class="footer-stack">PostgreSQL 17 + pgvector &middot; OpenAI text-embedding-3-small</span>`;
   });
 
 // What you'd expect to find for each query
 const expectedAnswer = {
-  "SMS": { files: ["sparse_matrix_solver_sms", "sms"], label: "the Sparse Matrix Solver docs" },
-  "UZF": { files: ["uzf"], label: "the Unsaturated Zone Flow package docs" },
+  "SMS": { files: ["sparse_matrix_solver_sms", "sms"], label: "the SMS (Sparse Matrix Solver) docs" },
+  "UZF": { files: ["uzf"], label: "the UZF (Unsaturated Zone Flow) docs" },
   "WEL package": { files: ["wel"], label: "the Well (WEL) package docs" },
   "groundwater recharge": { files: ["rch", "recharge"], label: "recharge-related docs" },
   "unsaturated zone flow": { files: ["uzf", "unsaturated"], label: "unsaturated zone flow docs" },
@@ -40,7 +39,11 @@ chips.forEach((chip) => {
 });
 
 async function search(query) {
-  activeQueryEl.textContent = `Searching: "${query}"`;
+  activeQueryEl.textContent = "";
+
+  // Clear previous state
+  document.querySelector('.fts-column')?.classList.remove('dimmed');
+  document.querySelector('.semantic-column')?.classList.remove('dimmed');
 
   ftsContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Searching...</div>';
   semContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Searching...</div>';
@@ -113,7 +116,33 @@ async function search(query) {
     }
 
     ftsTiming.innerHTML = `<span class="fast">${data.fts.timeMs}ms</span> &middot; ${data.fts.totalMatches} matches`;
-    activeQueryEl.textContent = `"${query}"`;
+
+    // Verdict line + dim losing column
+    const ftsCol = document.querySelector('.fts-column');
+    const semCol = document.querySelector('.semantic-column');
+    ftsCol.classList.remove('dimmed');
+    semCol.classList.remove('dimmed');
+
+    const ex = expectedAnswer[query];
+    if (ex && data.semantic) {
+      const matchEx = (fp) => ex.files.some(f => fp.toLowerCase().includes(f.toLowerCase()));
+      const ftsWon = data.fts.results.some(r => matchEx(r.filepath));
+      const semWon = data.semantic.results.some(r => matchEx(r.filepath));
+
+      if (ftsWon && !semWon) {
+        activeQueryEl.textContent = "KEYWORD SEARCH WINS";
+        semCol.classList.add('dimmed');
+      } else if (semWon && !ftsWon) {
+        activeQueryEl.textContent = "EMBEDDINGS WIN";
+        ftsCol.classList.add('dimmed');
+      } else if (ftsWon && semWon) {
+        activeQueryEl.textContent = "BOTH FIND IT";
+      } else {
+        activeQueryEl.textContent = `"${query}"`;
+      }
+    } else {
+      activeQueryEl.textContent = `"${query}"`;
+    }
   } catch (err) {
     ftsContainer.innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
     semContainer.innerHTML = "";
@@ -143,7 +172,7 @@ function resultRow(r, rank, isFts) {
   return `
     <div class="result-row">
       <div class="row-header">
-        <span class="row-rank">#${rank}</span>
+        <span class="row-rank">${rank}</span>
         <span class="row-filepath">${escapeHtml(filename)}</span>
         <span class="row-repo">${escapeHtml(r.repo)}</span>
       </div>

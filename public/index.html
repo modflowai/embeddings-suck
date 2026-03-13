@@ -6,7 +6,7 @@
   <title>Embeddings Suck (sometimes)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script>try{if(localStorage.getItem('theme')==='light')document.documentElement.classList.add('light')}catch(e){}</script>
   <script type="importmap">
@@ -25,26 +25,31 @@
   </button>
   <header>
     <h1>Embeddings Suck <span class="subtitle">(sometimes)</span></h1>
-    <p class="tagline">Text search vs AI embeddings on 1,862 MODFLOW hydrogeology docs</p>
-    <p class="philosophy">The only way to know what works is to try it on your own data.</p>
+    <p class="tagline">A side-by-side test on 1,862 real MODFLOW hydrogeology documents</p>
+    <p class="philosophy">Benchmarks lie. Your data tells the truth.</p>
   </header>
 
   <section class="search-area">
     <div class="chips">
       <input type="hidden" id="searchInput">
-      <button class="chip chip-fts" data-query="SMS">SMS</button>
-      <button class="chip chip-fts" data-query="UZF">UZF</button>
+      <button class="chip chip-fts" data-query="SMS">SMS solver</button>
+      <button class="chip chip-fts" data-query="UZF">UZF package</button>
       <button class="chip chip-fts" data-query="WEL package">WEL package</button>
       <button class="chip chip-sem" data-query="groundwater recharge">groundwater recharge</button>
       <button class="chip chip-sem" data-query="unsaturated zone flow">unsaturated zone flow</button>
       <button class="chip chip-mixed" data-query="PEST calibration">PEST calibration</button>
     </div>
+    <p class="chip-legend">
+      <span class="dot" style="background:#22c55e"></span>Keyword search wins &middot;
+      <span class="dot" style="background:#3b82f6"></span>Embeddings win &middot;
+      <span class="dot" style="background:#eab308"></span>It depends
+    </p>
     <p class="chip-hint" id="activeQuery"></p>
   </section>
 
   <!-- 3D Embedding Space Visualization -->
   <section class="viz-section">
-    <p class="viz-explainer">Each dot is a document. <strong>In embedding space, distance = similarity.</strong> The closest documents to your query should be the right answer.</p>
+    <p class="viz-explainer">Each dot is a document. <strong>Nearby dots mean similar content.</strong> Click a query to see what each search method retrieves.</p>
     <div id="viz3d" class="viz-container">
       <div class="viz-legend">
         <span class="legend-item"><span class="legend-dot" style="background:#ff4444"></span>Your query</span>
@@ -52,28 +57,28 @@
         <span class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span>Embedding results</span>
       </div>
     </div>
-    <p class="viz-caption" id="vizCaption">Click a query above to see where it lands in embedding space</p>
+    <p class="viz-caption" id="vizCaption">Sometimes exact words beat AI. Sometimes they don't. Try a query to see which.</p>
   </section>
 
   <section class="results-grid" id="resultsGrid">
     <div class="column fts-column">
       <div class="column-header">
-        <h2>Text Search <span class="method-badge fts-badge">Ctrl+F</span></h2>
-        <p class="method-desc">Classic text matching. Finds the exact words you typed.</p>
+        <h2>Keyword Search <span class="method-badge fts-badge">exact match</span></h2>
+        <p class="method-desc">Finds docs with your exact words. Fast, literal, no guessing.</p>
         <div class="timing" id="ftsTiming"></div>
       </div>
       <div class="results-list" id="ftsResults">
-        <div class="empty-state">Pick a query above to compare</div>
+        <div class="empty-state">Choose a query above to start the comparison</div>
       </div>
     </div>
     <div class="column semantic-column">
       <div class="column-header">
-        <h2>Embeddings <span class="method-badge semantic-badge">AI</span></h2>
-        <p class="method-desc">OpenAI text-embedding-3-small. Finds "similar meaning" via cosine distance.</p>
+        <h2>Semantic Search <span class="method-badge semantic-badge">similar meaning</span></h2>
+        <p class="method-desc">Uses AI to find similar meaning — even when the words differ.</p>
         <div class="timing" id="semanticTiming"></div>
       </div>
       <div class="results-list" id="semanticResults">
-        <div class="empty-state">Pick a query above to compare</div>
+        <div class="empty-state">Choose a query above to start the comparison</div>
       </div>
     </div>
   </section>
