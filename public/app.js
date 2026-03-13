@@ -21,10 +21,13 @@ fetch("/api/stats")
 const expectedAnswer = {
   "SMS": { files: ["sparse_matrix_solver_sms", "sms"], label: "the SMS (Sparse Matrix Solver) docs" },
   "UZF": { files: ["uzf"], label: "the UZF (Unsaturated Zone Flow) docs" },
-  "WEL package": { files: ["wel"], label: "the Well (WEL) package docs" },
+  "NOPTMAX": { files: ["pest_control_file", "noptmax", "control_file"], label: "the PEST control file docs (NOPTMAX parameter)" },
+  "MT3DMS": { files: ["mt3dms"], label: "the MT3DMS transport model docs" },
+  "MODPATH": { files: ["modpath"], label: "the MODPATH particle tracking docs" },
+  "PHIMLIM": { files: ["phimlim", "tikhonov", "regularis"], label: "the PHIMLIM regularisation docs" },
   "groundwater recharge": { files: ["rch", "recharge"], label: "recharge-related docs" },
-  "unsaturated zone flow": { files: ["uzf", "unsaturated"], label: "unsaturated zone flow docs" },
-  "PEST calibration": { files: ["pest"], label: "PEST calibration docs" },
+  "unsaturated zone flow": { files: ["richards", "unsaturated_flow"], label: "Richards' equation / unsaturated flow docs" },
+  "PESTPP-IES": { files: ["pestpp-ies", "pestpp_ies"], label: "the PESTPP-IES (Iterative Ensemble Smoother) docs" },
 };
 
 // Init 3D viz
@@ -32,6 +35,20 @@ init3D("viz3d");
 
 chips.forEach((chip) => {
   chip.addEventListener("click", () => {
+    if (chip.classList.contains("active")) {
+      // Deselect — reset everything
+      chip.classList.remove("active");
+      ftsContainer.innerHTML = '<div class="empty-state">Choose a query above to start the comparison</div>';
+      semContainer.innerHTML = '<div class="empty-state">Choose a query above to start the comparison</div>';
+      ftsTiming.textContent = "";
+      semTiming.textContent = "";
+      activeQueryEl.textContent = "";
+      vizCaption.innerHTML = "Sometimes exact words beat AI. Sometimes they don't. Try a query to see which.";
+      document.querySelector('.fts-column')?.classList.remove('dimmed');
+      document.querySelector('.semantic-column')?.classList.remove('dimmed');
+      resetViz();
+      return;
+    }
     chips.forEach((c) => c.classList.remove("active"));
     chip.classList.add("active");
     search(chip.dataset.query);
@@ -66,16 +83,21 @@ async function search(query) {
         `<span>${data.semantic.timeMs}ms</span> ` +
         `&middot; scanned ${data.semantic.totalScanned.toLocaleString()}`;
 
-      // Update 3D viz
-      highlightSearch(data.fts.results, data.semantic.results, query);
-
       // Caption — tell the story: what you'd expect vs what happened
       const sem1 = data.semantic.results[0]?.filepath?.split("/").pop();
       const expected = expectedAnswer[query];
       const matchesExpected = (filepath) =>
         expected.files.some(f => filepath.toLowerCase().includes(f.toLowerCase()));
-      const semFoundExpected = expected && data.semantic.results.some(r => matchesExpected(r.filepath));
-      const ftsFoundExpected = expected && data.fts.results.some(r => matchesExpected(r.filepath));
+      const semFoundExpected = expected && data.semantic.results.slice(0, 3).some(r => matchesExpected(r.filepath));
+      const ftsFoundExpected = expected && data.fts.results.slice(0, 3).some(r => matchesExpected(r.filepath));
+
+      // Determine winner for viz
+      const vizWinner = (ftsFoundExpected && !semFoundExpected) ? "fts"
+        : (semFoundExpected && !ftsFoundExpected) ? "sem"
+        : (ftsFoundExpected && semFoundExpected) ? "both" : null;
+
+      // Update 3D viz
+      highlightSearch(data.fts.results, data.semantic.results, query, vizWinner);
       const semRank = expected && data.semantic.results.findIndex(r => matchesExpected(r.filepath));
 
       if (expected && ftsFoundExpected && !semFoundExpected) {
@@ -126,8 +148,8 @@ async function search(query) {
     const ex = expectedAnswer[query];
     if (ex && data.semantic) {
       const matchEx = (fp) => ex.files.some(f => fp.toLowerCase().includes(f.toLowerCase()));
-      const ftsWon = data.fts.results.some(r => matchEx(r.filepath));
-      const semWon = data.semantic.results.some(r => matchEx(r.filepath));
+      const ftsWon = data.fts.results.slice(0, 3).some(r => matchEx(r.filepath));
+      const semWon = data.semantic.results.slice(0, 3).some(r => matchEx(r.filepath));
 
       if (ftsWon && !semWon) {
         activeQueryEl.textContent = "KEYWORD SEARCH WINS";

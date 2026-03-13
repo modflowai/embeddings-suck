@@ -161,6 +161,16 @@ export async function init3D(containerId) {
   gridGroup.add(makeAxis([0, 0, -axLen], [0, 0, axLen], 0x2563eb)); // Z blue
   scene.add(gridGroup);
 
+  // Lighting for 3D spheres
+  const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+  scene.add(ambient);
+  const keyLight = new THREE.PointLight(0xffffff, 1.2, 200);
+  keyLight.position.set(20, 30, 40);
+  scene.add(keyLight);
+  const fillLight = new THREE.PointLight(0x6688cc, 0.4, 200);
+  fillLight.position.set(-30, -10, -20);
+  scene.add(fillLight);
+
   highlightGroup = new THREE.Group();
   scene.add(highlightGroup);
 
@@ -203,7 +213,7 @@ function onMouseMove(e) {
   }
 }
 
-export function highlightSearch(ftsResults, semanticResults, query) {
+export function highlightSearch(ftsResults, semanticResults, query, winner) {
   if (!scene || !pointsData) return;
   const THREE = window.__THREE__;
 
@@ -229,18 +239,20 @@ export function highlightSearch(ftsResults, semanticResults, query) {
   const ftsSet = new Set(ftsResults.map(r => r.filepath));
   const semSet = new Set((semanticResults || []).map(r => r.filepath));
 
-  // Color FTS hits green
-  const ftsColor = new THREE.Color(0x22c55e);
-  for (const fp of ftsSet) {
-    const idx = fpIndex[fp];
-    if (idx !== undefined) colors.setXYZ(idx, ftsColor.r, ftsColor.g, ftsColor.b);
+  // Only color the winning side's corpus dots — loser stays gray
+  if (winner !== "sem") {
+    const ftsColor = new THREE.Color(0x22c55e);
+    for (const fp of ftsSet) {
+      const idx = fpIndex[fp];
+      if (idx !== undefined) colors.setXYZ(idx, ftsColor.r, ftsColor.g, ftsColor.b);
+    }
   }
-
-  // Color semantic hits blue (overwrites green if overlap — that's fine)
-  const semColor = new THREE.Color(0x3b82f6);
-  for (const fp of semSet) {
-    const idx = fpIndex[fp];
-    if (idx !== undefined) colors.setXYZ(idx, semColor.r, semColor.g, semColor.b);
+  if (winner !== "fts") {
+    const semColor = new THREE.Color(0x3b82f6);
+    for (const fp of semSet) {
+      const idx = fpIndex[fp];
+      if (idx !== undefined) colors.setXYZ(idx, semColor.r, semColor.g, semColor.b);
+    }
   }
 
   colors.needsUpdate = true;
@@ -251,23 +263,25 @@ export function highlightSearch(ftsResults, semanticResults, query) {
   if (qp) {
     const qPos = new THREE.Vector3(qp.x * SCALE, qp.y * SCALE, qp.z * SCALE);
 
-    // Query marker — bright sphere + glow ring + label
-    const qGeo = new THREE.SphereGeometry(1.0, 16, 16);
-    const qMat = new THREE.MeshBasicMaterial({ color: 0xff5a5f });
-    const qMesh = new THREE.Mesh(qGeo, qMat);
-    qMesh.position.copy(qPos);
-    highlightGroup.add(qMesh);
+    // Query marker — wireframe sphere + inner glow + label
+    const qGeo = new THREE.SphereGeometry(1.0, 20, 20);
+    const qWire = new THREE.Mesh(qGeo, new THREE.MeshBasicMaterial({ color: 0xff5a5f, wireframe: true, transparent: true, opacity: 0.7 }));
+    qWire.position.copy(qPos);
+    highlightGroup.add(qWire);
+    const qFill = new THREE.Mesh(new THREE.SphereGeometry(0.95, 20, 20), new THREE.MeshBasicMaterial({ color: 0xff5a5f, transparent: true, opacity: 0.15 }));
+    qFill.position.copy(qPos);
+    highlightGroup.add(qFill);
 
     // Glow ring around query
-    const glowGeo = new THREE.SphereGeometry(2.2, 16, 16);
-    const glowMat = new THREE.MeshBasicMaterial({ color: 0xff5a5f, transparent: true, opacity: 0.12 });
-    const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+    const glowGeo = new THREE.SphereGeometry(2.0, 20, 20);
+    const glowMesh = new THREE.Mesh(glowGeo, new THREE.MeshBasicMaterial({ color: 0xff5a5f, wireframe: true, transparent: true, opacity: 0.06 }));
     glowMesh.position.copy(qPos);
     highlightGroup.add(glowMesh);
 
     highlightGroup.add(makeLabel(`"${query}"`, qPos, 0xff6b81, 1.6));
 
-    // FTS top-3 — bright green spheres + lines + labels
+    // FTS results — #1 prominent, rest subtle
+    const ftsIsLoser = winner === "sem";
     for (let i = 0; i < Math.min(3, ftsResults.length); i++) {
       const idx = fpIndex[ftsResults[i].filepath];
       if (idx === undefined) continue;
@@ -275,22 +289,34 @@ export function highlightSearch(ftsResults, semanticResults, query) {
       const fPos = new THREE.Vector3(d.x * SCALE, d.y * SCALE, d.z * SCALE);
       const filename = ftsResults[i].filepath.split("/").pop();
 
-      const fGeo = new THREE.SphereGeometry(0.6 - i * 0.1, 12, 12);
-      const fMat = new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.95 - i * 0.1 });
-      const fMesh = new THREE.Mesh(fGeo, fMat);
-      fMesh.position.copy(fPos);
-      highlightGroup.add(fMesh);
-
       if (i === 0) {
-        highlightGroup.add(makeLabel(filename, fPos, 0x34d399, 1.0));
-      }
+        // #1 — wireframe sphere + fill + label + line
+        const fColor = ftsIsLoser ? 0x4a7a5e : 0x34d399;
+        const fWire = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 16), new THREE.MeshBasicMaterial({ color: fColor, wireframe: true, transparent: true, opacity: ftsIsLoser ? 0.25 : 0.6 }));
+        fWire.position.copy(fPos);
+        highlightGroup.add(fWire);
+        const fFill = new THREE.Mesh(new THREE.SphereGeometry(0.55, 16, 16), new THREE.MeshBasicMaterial({ color: fColor, transparent: true, opacity: ftsIsLoser ? 0.08 : 0.12 }));
+        fFill.position.copy(fPos);
+        highlightGroup.add(fFill);
 
-      const lineGeo = new THREE.BufferGeometry().setFromPoints([qPos, fPos]);
-      const lineMat = new THREE.LineBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.45 - i * 0.1 });
-      highlightGroup.add(new THREE.Line(lineGeo, lineMat));
+        const labelText = ftsIsLoser ? "\u2717 " + filename : "\u2713 " + filename;
+        const labelColor = ftsIsLoser ? 0x6b8a72 : 0x34d399;
+        highlightGroup.add(makeLabel(labelText, fPos, labelColor, 1.0));
+
+        const lineGeo = new THREE.BufferGeometry().setFromPoints([qPos, fPos]);
+        const lineMat = new THREE.LineBasicMaterial({ color: ftsIsLoser ? 0x4a7a5e : 0x34d399, transparent: true, opacity: ftsIsLoser ? 0.12 : 0.4 });
+        highlightGroup.add(new THREE.Line(lineGeo, lineMat));
+      } else {
+        // #2, #3 — tiny wireframe dot, no label, no line
+        const fc = ftsIsLoser ? 0x4a7a5e : 0x34d399;
+        const fMesh = new THREE.Mesh(new THREE.SphereGeometry(0.25, 10, 10), new THREE.MeshBasicMaterial({ color: fc, wireframe: true, transparent: true, opacity: 0.25 }));
+        fMesh.position.copy(fPos);
+        highlightGroup.add(fMesh);
+      }
     }
 
-    // Semantic top-3 — bright blue spheres + lines + labels
+    // Semantic results — #1 prominent, rest subtle
+    const semIsLoser = winner === "fts";
     if (semanticResults) {
       for (let i = 0; i < Math.min(3, semanticResults.length); i++) {
         const idx = fpIndex[semanticResults[i].filepath];
@@ -299,19 +325,29 @@ export function highlightSearch(ftsResults, semanticResults, query) {
         const dPos = new THREE.Vector3(d.x * SCALE, d.y * SCALE, d.z * SCALE);
         const filename = semanticResults[i].filepath.split("/").pop();
 
-        const sGeo = new THREE.SphereGeometry(0.6 - i * 0.1, 12, 12);
-        const sMat = new THREE.MeshBasicMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.95 - i * 0.1 });
-        const sMesh = new THREE.Mesh(sGeo, sMat);
-        sMesh.position.copy(dPos);
-        highlightGroup.add(sMesh);
-
         if (i === 0) {
-          highlightGroup.add(makeLabel(filename, dPos, 0x60a5fa, 1.0));
-        }
+          // #1 — wireframe sphere + fill + label + line
+          const sColor = semIsLoser ? 0x4a6a8a : 0x60a5fa;
+          const sWire = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 16), new THREE.MeshBasicMaterial({ color: sColor, wireframe: true, transparent: true, opacity: semIsLoser ? 0.25 : 0.6 }));
+          sWire.position.copy(dPos);
+          highlightGroup.add(sWire);
+          const sFill = new THREE.Mesh(new THREE.SphereGeometry(0.55, 16, 16), new THREE.MeshBasicMaterial({ color: sColor, transparent: true, opacity: semIsLoser ? 0.08 : 0.12 }));
+          sFill.position.copy(dPos);
+          highlightGroup.add(sFill);
+          const labelText = semIsLoser ? "\u2717 " + filename : "\u2713 " + filename;
+          const labelColor = semIsLoser ? 0x7a8a9a : 0x60a5fa;
+          highlightGroup.add(makeLabel(labelText, dPos, labelColor, 1.0));
 
-        const lineGeo = new THREE.BufferGeometry().setFromPoints([qPos, dPos]);
-        const lineMat = new THREE.LineBasicMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.45 - i * 0.1 });
-        highlightGroup.add(new THREE.Line(lineGeo, lineMat));
+          const lineGeo = new THREE.BufferGeometry().setFromPoints([qPos, dPos]);
+          const lineMat = new THREE.LineBasicMaterial({ color: semIsLoser ? 0x4a6a8a : 0x60a5fa, transparent: true, opacity: semIsLoser ? 0.12 : 0.4 });
+          highlightGroup.add(new THREE.Line(lineGeo, lineMat));
+        } else {
+          // #2, #3 — tiny wireframe dot, no label, no line
+          const sc = semIsLoser ? 0x4a6a8a : 0x60a5fa;
+          const sMesh = new THREE.Mesh(new THREE.SphereGeometry(0.25, 10, 10), new THREE.MeshBasicMaterial({ color: sc, wireframe: true, transparent: true, opacity: 0.25 }));
+          sMesh.position.copy(dPos);
+          highlightGroup.add(sMesh);
+        }
       }
     }
 
