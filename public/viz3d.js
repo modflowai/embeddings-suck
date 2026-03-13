@@ -40,11 +40,9 @@ export async function init3D(containerId) {
   const resp = await fetch("/points-3d.json");
   pointsData = await resp.json();
 
-  // Scene
+  // Scene — always dark "deep space" regardless of page theme
   scene = new THREE.Scene();
-  const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
-  scene.background = new THREE.Color(bgColor);
-  // No fog — we want all points visible
+  scene.background = new THREE.Color('#0d1117');
 
   const w = container.clientWidth;
   const h = container.clientHeight;
@@ -119,12 +117,12 @@ export async function init3D(containerId) {
   geo.userData.originalColors = new Float32Array(colors);
 
   const mat = new THREE.PointsMaterial({
-    size: 1.2,
+    size: 0.8,
     map: circleTexture,
     vertexColors: true,
     transparent: true,
-    opacity: 0.85,
-    alphaTest: 0.3,
+    opacity: 0.45,
+    alphaTest: 0.2,
     sizeAttenuation: true,
     depthWrite: false,
   });
@@ -154,7 +152,7 @@ export async function init3D(containerId) {
     const axGeo = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(...from), new THREE.Vector3(...to),
     ]);
-    const axMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.35 });
+    const axMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.18 });
     return new THREE.Line(axGeo, axMat);
   }
   const axLen = gridSize;
@@ -217,12 +215,12 @@ export function highlightSearch(ftsResults, semanticResults, query) {
     highlightGroup.remove(c);
   }
 
-  // Dim all doc points (but keep visible)
+  // Dim all doc points to muted gray — results will pop against this
   const colors = docPoints.geometry.attributes.color;
   const origColors = docPoints.geometry.userData.originalColors;
   for (let i = 0; i < pointsData.docs.length; i++) {
-    // Darken original color by 40%
-    colors.setXYZ(i, origColors[i * 3] * 0.4, origColors[i * 3 + 1] * 0.4, origColors[i * 3 + 2] * 0.4);
+    // Muted slate gray for background dots
+    colors.setXYZ(i, 0.25, 0.28, 0.32);
   }
 
   const fpIndex = {};
@@ -246,22 +244,30 @@ export function highlightSearch(ftsResults, semanticResults, query) {
   }
 
   colors.needsUpdate = true;
-  docPoints.material.opacity = 0.5;
+  docPoints.material.opacity = 0.25;  // Corpus fades back, results in highlightGroup pop
 
   // Query point
   const qp = pointsData.queries[query];
   if (qp) {
     const qPos = new THREE.Vector3(qp.x * SCALE, qp.y * SCALE, qp.z * SCALE);
 
-    // Query marker — small bright sphere + label
-    const qGeo = new THREE.SphereGeometry(0.8, 16, 16);
-    const qMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+    // Query marker — bright sphere + glow ring + label
+    const qGeo = new THREE.SphereGeometry(1.0, 16, 16);
+    const qMat = new THREE.MeshBasicMaterial({ color: 0xff5a5f });
     const qMesh = new THREE.Mesh(qGeo, qMat);
     qMesh.position.copy(qPos);
     highlightGroup.add(qMesh);
-    highlightGroup.add(makeLabel(`"${query}"`, qPos, 0xff4444, 1.2));
 
-    // FTS top-3 — green spheres + lines + labels
+    // Glow ring around query
+    const glowGeo = new THREE.SphereGeometry(2.2, 16, 16);
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xff5a5f, transparent: true, opacity: 0.12 });
+    const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+    glowMesh.position.copy(qPos);
+    highlightGroup.add(glowMesh);
+
+    highlightGroup.add(makeLabel(`"${query}"`, qPos, 0xff6b81, 1.6));
+
+    // FTS top-3 — bright green spheres + lines + labels
     for (let i = 0; i < Math.min(3, ftsResults.length); i++) {
       const idx = fpIndex[ftsResults[i].filepath];
       if (idx === undefined) continue;
@@ -269,22 +275,22 @@ export function highlightSearch(ftsResults, semanticResults, query) {
       const fPos = new THREE.Vector3(d.x * SCALE, d.y * SCALE, d.z * SCALE);
       const filename = ftsResults[i].filepath.split("/").pop();
 
-      const fGeo = new THREE.SphereGeometry(0.45 - i * 0.08, 12, 12);
-      const fMat = new THREE.MeshBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.9 - i * 0.15 });
+      const fGeo = new THREE.SphereGeometry(0.6 - i * 0.1, 12, 12);
+      const fMat = new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.95 - i * 0.1 });
       const fMesh = new THREE.Mesh(fGeo, fMat);
       fMesh.position.copy(fPos);
       highlightGroup.add(fMesh);
 
       if (i === 0) {
-        highlightGroup.add(makeLabel(filename, fPos, 0x22c55e, 1.0));
+        highlightGroup.add(makeLabel(filename, fPos, 0x34d399, 1.0));
       }
 
       const lineGeo = new THREE.BufferGeometry().setFromPoints([qPos, fPos]);
-      const lineMat = new THREE.LineBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.4 - i * 0.1 });
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.45 - i * 0.1 });
       highlightGroup.add(new THREE.Line(lineGeo, lineMat));
     }
 
-    // Semantic top-3 — blue spheres + lines + labels
+    // Semantic top-3 — bright blue spheres + lines + labels
     if (semanticResults) {
       for (let i = 0; i < Math.min(3, semanticResults.length); i++) {
         const idx = fpIndex[semanticResults[i].filepath];
@@ -293,18 +299,18 @@ export function highlightSearch(ftsResults, semanticResults, query) {
         const dPos = new THREE.Vector3(d.x * SCALE, d.y * SCALE, d.z * SCALE);
         const filename = semanticResults[i].filepath.split("/").pop();
 
-        const sGeo = new THREE.SphereGeometry(0.45 - i * 0.08, 12, 12);
-        const sMat = new THREE.MeshBasicMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.9 - i * 0.15 });
+        const sGeo = new THREE.SphereGeometry(0.6 - i * 0.1, 12, 12);
+        const sMat = new THREE.MeshBasicMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.95 - i * 0.1 });
         const sMesh = new THREE.Mesh(sGeo, sMat);
         sMesh.position.copy(dPos);
         highlightGroup.add(sMesh);
 
         if (i === 0) {
-          highlightGroup.add(makeLabel(filename, dPos, 0x3b82f6, 1.0));
+          highlightGroup.add(makeLabel(filename, dPos, 0x60a5fa, 1.0));
         }
 
         const lineGeo = new THREE.BufferGeometry().setFromPoints([qPos, dPos]);
-        const lineMat = new THREE.LineBasicMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.4 - i * 0.1 });
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.45 - i * 0.1 });
         highlightGroup.add(new THREE.Line(lineGeo, lineMat));
       }
     }
@@ -328,31 +334,20 @@ function buildGrid(THREE, group, gridSize, gridDiv) {
     }
   }
 
-  const isLight = document.documentElement.classList.contains("light");
-  const gridHelper = new THREE.GridHelper(gridSize * 2, gridDiv * 2,
-    isLight ? 0x999999 : 0x333333,
-    isLight ? 0xbbbbbb : 0x222222
-  );
+  // Grid always dark-themed (chart is always dark)
+  const gridHelper = new THREE.GridHelper(gridSize * 2, gridDiv * 2, 0x1e293b, 0x161d2e);
   gridHelper.position.y = -gridSize / 2;
-  // GridHelper creates an array of materials
   const mats = Array.isArray(gridHelper.material) ? gridHelper.material : [gridHelper.material];
   mats.forEach(m => {
     m.transparent = true;
-    m.opacity = isLight ? 0.35 : 0.15;
+    m.opacity = 0.12;
   });
   group.add(gridHelper);
 }
 
 export function updateThemeBg() {
-  if (!scene || !window.__THREE__) return;
-  const THREE = window.__THREE__;
-  const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
-  scene.background = new THREE.Color(bgColor);
-
-  // Rebuild grid with theme-appropriate colors
-  if (gridGroup) {
-    buildGrid(THREE, gridGroup, gridGroup.userData.gridSize, gridGroup.userData.gridDiv);
-  }
+  // Scene stays dark regardless of page theme — no-op for background.
+  // Grid also stays dark-themed, so no rebuild needed.
 }
 
 export function resetViz() {
@@ -372,7 +367,7 @@ export function resetViz() {
     colors.array[i] = originals[i];
   }
   colors.needsUpdate = true;
-  docPoints.material.opacity = 0.7;
+  docPoints.material.opacity = 0.45;
 }
 
 function makeLabel(text, position, color, yOffset = 1.0) {
@@ -380,8 +375,8 @@ function makeLabel(text, position, color, yOffset = 1.0) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
 
-  const fontSize = 22;
-  const font = `500 ${fontSize}px 'Geist', -apple-system, sans-serif`;
+  const fontSize = 15;
+  const font = `600 ${fontSize}px 'Geist', -apple-system, sans-serif`;
   ctx.font = font;
   const metrics = ctx.measureText(text);
   const textWidth = metrics.width + 16;
@@ -390,15 +385,14 @@ function makeLabel(text, position, color, yOffset = 1.0) {
   canvas.width = Math.min(textWidth, 800);
   canvas.height = textHeight;
 
-  // No background, no pill — just text with a subtle shadow for readability
+  // Text with shadow for readability on dark scene
   const c = new THREE.Color(color);
   ctx.font = font;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  // Thin outline for readability — no glow
-  const isLight = document.documentElement.classList.contains("light");
-  ctx.strokeStyle = isLight ? "rgba(255,255,255,0.8)" : "rgba(0,0,0,0.7)";
+  // Dark outline for readability on dark background
+  ctx.strokeStyle = "rgba(0,0,0,0.8)";
   ctx.lineWidth = 3;
   ctx.lineJoin = "round";
   ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
